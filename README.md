@@ -1,6 +1,6 @@
 # Personalized Learning Platform for Data Science & ML Engineering
 
-> **Day 1 of 9** — Level 1 (Foundation Data Scientist) — Supervised Learning & Skill-Gap Baseline
+> **Day 3 of 9** — Level 1 (Foundation Data Scientist) — DL: Neural Networks, CNNs & FastAPI Deployment
 
 ---
 
@@ -10,133 +10,168 @@ This system recommends **personalized learning paths** to aspiring data scientis
 
 1. **`next_best_module`** — which learning module to recommend next (multi-class)
 2. **`dropout_risk`** — whether the learner is at risk of dropping out (binary)
+3. **`chart_type`** — classifies submitted chart images (6 classes) for visual exercise grading (Day 3)
 
 ---
 
-## Project Structure
+## Architecture Overview (Days 1–3)
 
 ```
 learningpath/
+├── app/
+│   ├── streamlit_app.py          # Streamlit app (Tab 1: Advisor, Tab 2: Grader)
+│   └── api/
+│       └── main.py               # FastAPI chart-type classifier service
 ├── data/
 │   ├── raw/
 │   │   └── learners.csv          # Synthetic dataset (~3,000 records)
-│   └── processed/
-│       ├── learners_clean.csv    # After cleaning/imputation
-│       └── learners_features.csv # After feature engineering
+│   ├── processed/
+│   │   ├── learners_clean.csv
+│   │   └── learners_features.csv
+│   └── charts/                   # Day 3 chart image dataset
+│       ├── train/{bar,line,scatter,pie,histogram,box}/   (400 imgs/class)
+│       ├── val/{...}/                                     (50 imgs/class)
+│       └── test/{...}/                                    (50 imgs/class)
 ├── notebooks/
-│   └── day1_eda.ipynb            # Exploratory Data Analysis
+│   └── day1_eda.ipynb
 ├── src/
-│   ├── data_prep.py              # Loading, imputation, outlier handling
-│   ├── features.py               # Feature engineering + encoding + scaling
-│   ├── train.py                  # Model training (LR + Random Forest)
-│   └── evaluate.py               # Metrics, plots, reports
+│   ├── data_prep.py              # Data cleaning & imputation
+│   ├── features.py               # Feature engineering, scaling & encoding
+│   ├── train.py                  # Day 1: Baseline models (LR / RF)
+│   ├── train_ensembles.py        # Day 2: Ensemble comparison
+│   ├── tune.py                   # Day 2: Optuna tuning + SHAP + artifact saving
+│   ├── evaluate.py               # Evaluation utilities
+│   ├── generate_chart_dataset.py # Day 3: Synthetic chart image generator
+│   ├── train_mlp.py              # Day 3: MLP baseline (flatten → FC)
+│   ├── train_cnn.py              # Day 3: CNN from scratch
+│   └── train_transfer.py         # Day 3: ResNet18 fine-tuning (production model)
 ├── models/
-│   ├── next_best_module_model.pkl
-│   ├── dropout_risk_model.pkl
+│   ├── next_best_module_model_tuned.pkl
+│   ├── dropout_risk_model_tuned.pkl
+│   ├── preprocessor.pkl
 │   ├── scaler.pkl
-│   └── module_label_encoder.pkl
+│   ├── module_label_encoder.pkl
+│   ├── mlp_chart.pt              # MLP baseline
+│   ├── cnn_scratch.pt            # CNN from scratch
+│   └── chart_classifier.pt      # ★ Production: ResNet18 fine-tuned
 ├── reports/
-│   ├── day1_metrics.json
 │   ├── day1_model_evaluation_report.md
-│   ├── model_comparison.png
-│   ├── module_confusion_matrix.png
-│   ├── dropout_confusion_matrix.png
-│   ├── dropout_roc_curve.png
-│   ├── module_feature_importance.png
-│   └── dropout_feature_importance.png
-├── generate_data.py              # Synthetic data generator
-├── run_pipeline.py               # End-to-end Day 1 runner
+│   ├── day2_model_comparison.md
+│   ├── day3_dataset_sample.png
+│   ├── day3_cnn_curves.png
+│   ├── day3_transfer_curves.png
+│   ├── day3_cnn_confusion.png
+│   ├── day3_transfer_confusion.png
+│   ├── day3_dl_evaluation.md     # MLP vs CNN vs Transfer comparison
+│   └── level1_completion_review.md  # 36/40 self-score rubric
+├── generate_data.py
+├── run_pipeline.py
 ├── requirements.txt
 └── README.md
 ```
 
 ---
 
-## Setup
+## Setup & Installation
 
-### 1. Prerequisites
-- Python 3.10+
+### Prerequisites
+- Python 3.11
 - pip
 
-### 2. Install dependencies
+### Install Dependencies
 
 ```bash
 pip install -r requirements.txt
+
+# PyTorch CPU (Windows)
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+
+# FastAPI + file upload support
+pip install fastapi "python-multipart>=0.0.7"
 ```
+
+> **Note (Windows):** Use `lightgbm==4.3.0` — newer versions cause OSError on Windows with numpy 1.x.
 
 ---
 
-## How to Run — Day 1 End-to-End
+## How to Run — Full Pipeline
 
-### Option A: Full pipeline (recommended)
+### Day 1 — Baseline ML Pipeline
 
 ```bash
-python run_pipeline.py
+python generate_data.py          # generate synthetic learner dataset
+python src/data_prep.py          # clean & process
+python src/train.py              # train LR + RF baselines
+python src/evaluate.py           # evaluation report
 ```
 
-This automatically runs all stages in sequence:
-1. Generates `data/raw/learners.csv` (if not present)
-2. Cleans data → `data/processed/learners_clean.csv`
-3. Engineers features, encodes, scales, splits train/test
-4. Trains Logistic Regression and Random Forest for both targets
-5. Saves best models to `models/`
-6. Generates all evaluation plots and metrics to `reports/`
-
-### Option B: Run individual stages
+### Day 2 — Ensemble Tuning
 
 ```bash
-# 1. Generate data
-python generate_data.py
-
-# 2. Clean data
-python src/data_prep.py
-
-# 3. Feature engineering
-python src/features.py
-
-# 4. Train models
-python src/train.py
-
-# 5. Evaluate models
-python src/evaluate.py
+python src/train_ensembles.py    # compare RF, XGBoost, LightGBM
+python src/tune.py               # Optuna 5-fold CV tuning + SHAP + save models
 ```
 
-### Option C: Explore EDA notebook
+### Day 3 — Deep Learning + FastAPI
 
 ```bash
-jupyter notebook notebooks/day1_eda.ipynb
+# 1. Generate chart image dataset (3,000 images, 6 classes)
+python src/generate_chart_dataset.py
+
+# 2. Train models (MLP baseline → CNN from scratch → ResNet18 production)
+python src/train_mlp.py
+python src/train_cnn.py
+python src/train_transfer.py     # → saves models/chart_classifier.pt
+
+# 3. Start FastAPI classifier service (Terminal 1)
+uvicorn app.api.main:app --reload --port 8000
+
+# 4. Start Streamlit dashboard (Terminal 2)
+streamlit run app/streamlit_app.py
 ```
 
----
-
-## Key Design Decisions
-
-| Decision | Rationale |
-|---|---|
-| Median imputation for numerics | Robust to outliers present in experience/hours fields |
-| Mode imputation for categoricals | Preserves natural class distribution |
-| IQR Winsorisation (factor=2.5) | Caps without removing outliers (preserves N=3000) |
-| Ordinal encoding for skill level | Preserves Beginner < Intermediate < Advanced ordering |
-| StandardScaler | Required for Logistic Regression; fair comparison with RF |
-| Stratified train/test split | Ensures all 7 module classes represented in both sets |
-| Macro-averaged F1 as selector | Handles class imbalance in next_best_module |
+**API test via Swagger UI:** http://localhost:8000/docs  
+**Streamlit dashboard:** http://localhost:8501
 
 ---
 
-## Engineered Features
+## Model Benchmarks
 
-| Feature | Description |
-|---|---|
-| `overall_skill_gap_score` | Weighted avg gap vs career target (higher = more gaps) |
-| `engagement_score` | Composite of weekly hours + module completion rate |
-| `topic_weakness_flag` | Integer-encoded label of primary skill gap topic |
+### Days 1–2: Learner Recommendation
+
+| Task | Winner | Test Accuracy | F1 Macro | ROC-AUC |
+|---|---|---|---|---|
+| `next_best_module` | Optuna RF | ~76–78% | ~0.61–0.66 | — |
+| `dropout_risk` | Optuna RF | ~88–90% | ~0.895 | **0.954** |
+
+### Day 3: Chart Classification (see `reports/day3_dl_evaluation.md`)
+
+| Model | Test Accuracy | F1 Macro | Train Time |
+|---|---|---|---|
+| MLP Baseline | see report | see report | ~60s |
+| CNN from Scratch | see report | see report | ~5min |
+| **ResNet18 Transfer** (★ production) | **best** | **best** | ~15min |
 
 ---
 
-## Day 2 Preview
+## Streamlit Features
 
-Day 2 will extend this baseline with:
-- Ensemble methods (Gradient Boosting, XGBoost)
-- Hyperparameter tuning (GridSearchCV / RandomizedSearchCV)
-- Cross-validation (StratifiedKFold)
-- SHAP explainability for model interpretability
+**Tab 1 — Learning Path Advisor** (Days 1–2):
+- Interactive learner profile input (career goal, skill levels, quiz scores)
+- Real-time module recommendation with probability breakdown
+- Dropout risk badge (Low 🟢, Medium 🟡, High 🔴) with intervention advice
+
+**Tab 2 — Visualization Submission Grader** (Day 3):
+- Upload a chart image (PNG/JPG)
+- Calls FastAPI `/predict-chart-type` → returns chart class + confidence scores
+- PASS/FAIL verdict vs. expected chart type for coding challenge grading
+
+---
+
+## Level 1 Completion Score
+
+**36/40** (≥32 required to pass) — See [`reports/level1_completion_review.md`](reports/level1_completion_review.md)
+
+---
+
+> **Day 4** begins Level 2: LSTM/Attention sequence models for learner mastery tracking over time.
